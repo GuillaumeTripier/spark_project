@@ -67,15 +67,11 @@ class FootballApp():
 		dfInput = dfInput.select("match", "competition", "adversaire", "score_france", "score_adversaire", "penalty_france", "penalty_adversaire", "date")
 		dfInput = dfInput.withColumn('penalty_france', self.change_penality_null_by_0_udf(dfInput.penalty_france))
 		dfInput = dfInput.withColumn('penalty_adversaire', self.change_penality_null_by_0_udf(dfInput.penalty_adversaire))
+		dfInput = dfInput.withColumn('is_at_home', self.is_match_played_at_home_udf(dfInput.match, dfInput.adversaire))
 		dfInput = dfInput.withColumn('is_at_world_cup', self.is_match_played_at_world_cup_udf(dfInput.competition))
 		return self.filter_after_date(datetime(1980, 3, 1), dfInput)
 
-	def main(self):
-		dfMatches = self.load_dataFrame_from_csv("res/df_matches.csv")
-		dfMatchesFiltered = self.step_one_clean_data(dfMatches)
-		#dfMatchesFiltered.persist()
-		dfMatchesFiltered = dfMatchesFiltered.withColumn('is_at_home', self.is_match_played_at_home_udf(dfMatchesFiltered.match, dfMatchesFiltered.adversaire))
-		
+	def step_two_generate_stats(self, dfMatches):
 		windowByAdversaire = Window.partitionBy("adversaire")
 
 		avgScoreFrance = F.avg("score_france").over(windowByAdversaire)
@@ -83,17 +79,26 @@ class FootballApp():
 		totalMatchCount = F.count("adversaire").over(windowByAdversaire)
 		rateMatchPlayedAtHomeCount = F.sum(F.col("is_at_home").cast("long")).over(windowByAdversaire) / F.count("adversaire").over(windowByAdversaire) * 100
 		totalMatchWorldCup = F.sum(F.col("is_at_world_cup").cast("long")).over(windowByAdversaire)
+		maxPenalityFrance = F.max("penalty_france").over(windowByAdversaire)
+		maxPenalityAdversaire = F.max("penalty_adversaire").over(windowByAdversaire)
 		
-		dfStats = dfMatchesFiltered.drop("competition").drop("match").drop("date")
+		dfStats = dfMatches.drop("competition").drop("match").drop("date")
 		dfStats = dfStats.withColumn("avg_score_france", avgScoreFrance).drop("score_france")
 		dfStats = dfStats.withColumn("avg_score_adversaire", avgScoreAdversaire).drop("score_adversaire")
 		dfStats = dfStats.withColumn("match_count", totalMatchCount)
 		dfStats = dfStats.withColumn("rate_at_home", rateMatchPlayedAtHomeCount).drop("is_at_home")
 		dfStats = dfStats.withColumn("at_world_cup_count", totalMatchWorldCup).drop("is_at_world_cup")
-		
-		#dfStats = dfStats.join(self.total_match_count_by_adversaire(dfStats), "adversaire")
-		#dfStats = dfStats.withColumn("match_count", dfMatchesFiltered.count(dfStats.adversaire == adversaire))
+		dfStats = dfStats.withColumn("max_penality_france", maxPenalityFrance).drop("penalty_france")
+		dfStats = dfStats.withColumn("max_penalty_adversaire", maxPenalityAdversaire).drop("penalty_adversaire")
+		return dfStats.dropDuplicates()
 
+	def main(self):
+		dfMatches = self.load_dataFrame_from_csv("res/df_matches.csv")
+		dfMatchesFiltered = self.step_one_clean_data(dfMatches)
+		#dfMatchesFiltered.persist()
+
+		dfStats = self.step_two_generate_stats(dfMatchesFiltered)
+		
 		dfStats.printSchema()
 		dfStats.show(50)
 
