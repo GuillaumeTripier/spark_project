@@ -24,10 +24,24 @@ class FootballApp():
 			return True 
 		return False
 
+	@staticmethod
+	def is_match_played_at_world_cup(competition):
+		if competition.startswith("Coupe du monde") :
+			return True 
+		return False
+		
+	#@staticmethod
+	#def total_match_count_by_adversaire(dfInput):
+	#	cnt_cond = lambda cond: F.sum(F.when(cond, 1).otherwise(0))
+	#	return dfInput.groupBy('adversaire').agg(
+	#		cnt_cond(F.col('adversaire') == dfInput.adversaire).alias('match_count')
+	#	)
+
 	def __init__(self, argv):
 		self.spark = SparkSession.builder.appName("my-spark-app").config("spark.ui.port","5050").getOrCreate()
 		self.change_penality_null_by_0_udf = F.udf(self.change_penality_null_by_0, IntegerType())
 		self.is_match_played_at_home_udf = F.udf(self.is_match_played_at_home, BooleanType())
+		self.is_match_played_at_world_cup_udf = F.udf(self.is_match_played_at_world_cup, BooleanType())
 	
 	def load_dataFrame_from_csv(self, csvFilePath):
 		schema = StructType([
@@ -53,6 +67,7 @@ class FootballApp():
 		dfInput = dfInput.select("match", "competition", "adversaire", "score_france", "score_adversaire", "penalty_france", "penalty_adversaire", "date")
 		dfInput = dfInput.withColumn('penalty_france', self.change_penality_null_by_0_udf(dfInput.penalty_france))
 		dfInput = dfInput.withColumn('penalty_adversaire', self.change_penality_null_by_0_udf(dfInput.penalty_adversaire))
+		dfInput = dfInput.withColumn('is_at_world_cup', self.is_match_played_at_world_cup_udf(dfInput.competition))
 		return self.filter_after_date(datetime(1980, 3, 1), dfInput)
 
 	def main(self):
@@ -65,10 +80,22 @@ class FootballApp():
 
 		avgScoreFrance = F.avg("score_france").over(windowByAdversaire)
 		avgScoreAdversaire = F.avg("score_adversaire").over(windowByAdversaire)
-		dfStats = dfMatchesFiltered.withColumn("avg_score_france", avgScoreFrance).withColumn("avg_score_adversaire", avgScoreAdversaire)
+		totalMatchCount = F.count("adversaire").over(windowByAdversaire)
+		rateMatchPlayedAtHomeCount = F.sum(F.col("is_at_home").cast("long")).over(windowByAdversaire) / F.count("adversaire").over(windowByAdversaire) * 100
+		totalMatchWorldCup = F.sum(F.col("is_at_world_cup").cast("long")).over(windowByAdversaire)
 		
+		dfStats = dfMatchesFiltered.drop("competition").drop("match").drop("date")
+		dfStats = dfStats.withColumn("avg_score_france", avgScoreFrance).drop("score_france")
+		dfStats = dfStats.withColumn("avg_score_adversaire", avgScoreAdversaire).drop("score_adversaire")
+		dfStats = dfStats.withColumn("match_count", totalMatchCount)
+		dfStats = dfStats.withColumn("rate_at_home", rateMatchPlayedAtHomeCount).drop("is_at_home")
+		dfStats = dfStats.withColumn("at_world_cup_count", totalMatchWorldCup).drop("is_at_world_cup")
+		
+		#dfStats = dfStats.join(self.total_match_count_by_adversaire(dfStats), "adversaire")
+		#dfStats = dfStats.withColumn("match_count", dfMatchesFiltered.count(dfStats.adversaire == adversaire))
+
 		dfStats.printSchema()
-		dfStats.show(20)
+		dfStats.show(50)
 
 if __name__ == '__main__':
 	footballApp = FootballApp(sys.argv)
