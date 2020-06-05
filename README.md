@@ -19,12 +19,22 @@ Projet réalisé sous <span style="color:green">Python 3.6</span>.
 
 # Stockage des données
 
-* Le fichier .csv source utilisé provient de : ​https://www.data.gouv.fr/fr/datasets/histoire-de-lequipe-de-france-de-football/ et est situé dans le dossier "resource"
+* Le fichier .csv source doit être fournis dans le dossier "resource" et doit porter le nom df_matches.csv. Il doit contenir des formatées de la même façon que celui disponible sur le site : ​https://www.data.gouv.fr/fr/datasets/histoire-de-lequipe-de-france-de-football/ 
 * Après l'exécution du programme, les fichiers générés se trouveront dans un dossier "output"
 
+# Prérequis
+
+* Apache Spark
+* Python 3.x
+* pyspark pour Python
+* setuptools pour Python
+
 # Lancer le programme
-Pour générer l'exécutable .egg à partir du package :
+Pour générer l'archive .egg à partir du package :
 ```python setup.py bdist_egg```
 
-Pour lancer cet exécutable via spark en local :
+Pour lancer cet archive via spark en local :
 ```spark-submit --master local --py-files dist\```<span style="color:blue">LeNomDuFichierExecutable</span>```.egg launch.py```
+
+Pour lancer les tests :
+```python -m esgi.exo.FootballAppTest.FootballAppTest```
