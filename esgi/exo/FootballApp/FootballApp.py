@@ -1,7 +1,7 @@
 import sys
 from datetime import datetime
 from pyspark.sql import SparkSession, Window, SQLContext
-from pyspark import SparkConf
+from pyspark import SparkConf, StorageLevel
 import pyspark.sql.functions as F
 from pyspark.sql.types import StringType, DateType, StructType, StructField, IntegerType, BooleanType
 
@@ -29,13 +29,6 @@ class FootballApp():
 		if competition.startswith("Coupe du monde") :
 			return True 
 		return False
-		
-	#@staticmethod
-	#def total_match_count_by_adversaire(dfInput):
-	#	cnt_cond = lambda cond: F.sum(F.when(cond, 1).otherwise(0))
-	#	return dfInput.groupBy('adversaire').agg(
-	#		cnt_cond(F.col('adversaire') == dfInput.adversaire).alias('match_count')
-	#	)
 
 	def __init__(self, argv):
 		self.spark = SparkSession.builder.appName("my-spark-app").config("spark.ui.port","5050").getOrCreate()
@@ -64,7 +57,7 @@ class FootballApp():
 
 	def step_one_clean_data(self, dfInput):
 		dfInput = dfInput.withColumnRenamed("X4", "match").withColumnRenamed("X6", "competition")
-		dfInput = dfInput.select("match", "competition", "adversaire", "score_france", "score_adversaire", "penalty_france", "penalty_adversaire", "date")
+		dfInput = dfInput.select("match", "competition", "adversaire", "score_france", "score_adversaire", "penalty_france", "penalty_adversaire", "date", "year")
 		dfInput = dfInput.withColumn('penalty_france', self.change_penality_null_by_0_udf(dfInput.penalty_france))
 		dfInput = dfInput.withColumn('penalty_adversaire', self.change_penality_null_by_0_udf(dfInput.penalty_adversaire))
 		dfInput = dfInput.withColumn('is_at_home', self.is_match_played_at_home_udf(dfInput.match, dfInput.adversaire))
@@ -82,7 +75,7 @@ class FootballApp():
 		maxPenalityFrance = F.max("penalty_france").over(windowByAdversaire)
 		maxPenalityAdversaire = F.max("penalty_adversaire").over(windowByAdversaire)
 		
-		dfStats = dfMatches.drop("competition").drop("match").drop("date")
+		dfStats = dfMatches.drop("competition").drop("match").drop("date").drop("year")
 		dfStats = dfStats.withColumn("avg_score_france", avgScoreFrance).drop("score_france")
 		dfStats = dfStats.withColumn("avg_score_adversaire", avgScoreAdversaire).drop("score_adversaire")
 		dfStats = dfStats.withColumn("match_count", totalMatchCount)
@@ -90,18 +83,22 @@ class FootballApp():
 		dfStats = dfStats.withColumn("at_world_cup_count", totalMatchWorldCup).drop("is_at_world_cup")
 		dfStats = dfStats.withColumn("max_penality_france", maxPenalityFrance).drop("penalty_france")
 		dfStats = dfStats.withColumn("max_penalty_adversaire", maxPenalityAdversaire).drop("penalty_adversaire")
-		dfStats.write.mode('overwrite').parquet("output/stats.parquet")
+		dfStats.dropDuplicates().write.mode('overwrite').parquet("output/stats.parquet")
 		#return dfStats.dropDuplicates()
 
+	def step_three_join(self, dfMatchesFiltered):
+		dfStats = SQLContext(self.spark).read.parquet('output/stats.parquet')
+		dfJoined = dfMatchesFiltered.join(dfStats, "adversaire")
+		dfJoined.write.partitionBy("year", "date").mode('overwrite').parquet("output/result.parquet")
+
 	def main(self):
-		dfMatches = self.load_dataFrame_from_csv("res/df_matches.csv")
+		dfMatches = self.load_dataFrame_from_csv("resource/df_matches.csv")
 		dfMatchesFiltered = self.step_one_clean_data(dfMatches)
-		#dfMatchesFiltered.persist()
+		#dfMatchesFiltered.persist(StorageLevel.MEMORY_AND_DISK)
 
 		self.step_two_generate_stats(dfMatchesFiltered)
-		
-		#dfStats.printSchema()
-		#dfStats.show(50)
+		self.step_three_join(dfMatchesFiltered)
+		#dfMatchesFiltered.unpersist()
 
 if __name__ == '__main__':
 	footballApp = FootballApp(sys.argv)
