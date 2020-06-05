@@ -19,7 +19,7 @@ Projet réalisé sous <span style="color:green">Python 3.6</span>.
 
 # Stockage des données
 
-* Le fichier .csv source doit être fournis dans le dossier "resource" et doit porter le nom df_matches.csv. Il doit contenir des formatées de la même façon que celui disponible sur le site : ​https://www.data.gouv.fr/fr/datasets/histoire-de-lequipe-de-france-de-football/ 
+* Le fichier .csv source doit être fournis dans un dossier "resource" et doit porter le nom df_matches.csv. Il doit contenir des formatées de la même façon que celui disponible sur le site : ​https://www.data.gouv.fr/fr/datasets/histoire-de-lequipe-de-france-de-football/ 
 * Après l'exécution du programme, les fichiers générés se trouveront dans un dossier "output"
 
 # Prérequis
