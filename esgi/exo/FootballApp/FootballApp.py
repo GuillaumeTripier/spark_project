@@ -90,17 +90,18 @@ class FootballApp():
 		dfStats = dfStats.withColumn("at_world_cup_count", totalMatchWorldCup).drop("is_at_world_cup")
 		dfStats = dfStats.withColumn("max_penality_france", maxPenalityFrance).drop("penalty_france")
 		dfStats = dfStats.withColumn("max_penalty_adversaire", maxPenalityAdversaire).drop("penalty_adversaire")
-		return dfStats.dropDuplicates()
+		dfStats.write.mode('overwrite').parquet("output/stats.parquet")
+		#return dfStats.dropDuplicates()
 
 	def main(self):
 		dfMatches = self.load_dataFrame_from_csv("res/df_matches.csv")
 		dfMatchesFiltered = self.step_one_clean_data(dfMatches)
 		#dfMatchesFiltered.persist()
 
-		dfStats = self.step_two_generate_stats(dfMatchesFiltered)
+		self.step_two_generate_stats(dfMatchesFiltered)
 		
-		dfStats.printSchema()
-		dfStats.show(50)
+		#dfStats.printSchema()
+		#dfStats.show(50)
 
 if __name__ == '__main__':
 	footballApp = FootballApp(sys.argv)
